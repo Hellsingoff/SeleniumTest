@@ -3,78 +3,101 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import InvalidArgumentException
+from pages.google_page import GooglePage
+from pages.cbr_page import CBRPage
+from pages.locators import GooglePageLocators
+from pages.locators import CBRPageLocators
 
-@given('открыт сайт "{url}"')
-def step(context, url):
-    context.browser.get('http:\\' + url)
+@given('открыть сайт google.ru')
+def step(context):
+    context.page = GooglePage(context.browser, 'https://www.google.ru/')
+    context.page.open()
+    assert context.page.check_url('https://www.google.ru/'), 'Не тот сайт'
 
-@then('проверить, что появилось поле "{field}"')
-def step(context, field):
-    field = field.lower()
-    wait = EC.element_to_be_clickable(
-                                (By.CSS_SELECTOR, context.locator[field]))
-    WebDriverWait(context.browser, context.timer).until(wait)
+@then('проверить, что появилось поле поиск')
+def step(context):
+    context.page.is_present(GooglePageLocators.SEARCH_FIELD)
 
-@then('ввести в поле "{field}" значение "{text}"')
-def step(context, field, text):
-    field = field.lower()
-    if field in context.locator:
-        field_element = context.browser.find_element_by_css_selector(
-                                                context.locator[field])
-        field_element.send_keys(text)
+@then('ввести в поле поиск значение "{text}"')
+def step(context, text):
+    try:
+        field = context.browser.find_element(*GooglePageLocators.SEARCH_FIELD)
+        field.send_keys(text)
+    except:
+        raise AssertionError('Не удалось ввести текст в поле')
 
-@then('нажать на "{obj_name}"')
-def step(context, obj_name):
-    obj_name = obj_name.lower()
-    if obj_name in context.locator:
-        waiting = EC.element_to_be_clickable(
-                            (By.CSS_SELECTOR, context.locator[obj_name]))
-        WebDriverWait(context.browser, context.timer).until(waiting).click()
-    elif obj_name in context.found:
-        context.found[obj_name].click()
-        # На случай открытия новой страницы в новой вкладке:
-        context.browser.switch_to_window(context.browser.window_handles[-1])
-        
+@then('нажать на кнопку Поиск в google')
+def step(context):
+    context.page.click_gently(GooglePageLocators.SEARCH_BUTTON)
 
 @then('найти ссылку "{url}"')
 def step(context, url):
-    context.found[url.lower()] = (
-            context.browser.find_element_by_css_selector(
-                                            '[href$="%s/"]' % url.lower()))
+    context.page.find_link(url)
 
-@then('проверить, что открыт "{site}"')
-def step(context, site):
-    site = context.locator[site.lower()]
-    opened_url = context.browser.current_url
-    assert (opened_url == "http://" + site + "/" or 
-            opened_url == "https://" + site + "/")
+@then('нажать на ссылку "{url}"')
+def step(context, url):
+    context.page.go_to_selected_result(url)
+    context.page = CBRPage(context.browser, context.browser.current_url)
 
-@then('поставить галочку "{check}"')
-def step(context, check):
-    context.execute_steps('Тогда нажать на "%s"' % check)
+@then('проверить, что открыт сайт Центрального банка РФ')
+def step(context):
+    assert context.page.check_url('http://www.cbr.ru/'), 'Открыт не тот сайт'
+
+@then('нажать на кнопку Интернет-приемная')
+def step(context):
+    context.page.click_gently(CBRPageLocators.RECEPTION)
+
+@then('открыть раздел Написать благодарность')
+def step(context):
+    context.page.click_gently(CBRPageLocators.GRATITUDE)
+
+@then('ввести в поле Ваша благодарность значение "{text}"')
+def step(context, text):
+    try:
+        field = context.browser.find_element(
+                                *CBRPageLocators.GRATITUDE_MESSAGE)
+        field.send_keys(text)
+    except:
+        raise AssertionError('Не удалось ввести текст в поле')
+
+@then('поставить галочку Я согласен')
+def step(context):
+    context.page.click_gently(CBRPageLocators.AGREEMENT)
 
 @then('сделать скриншот')
 def step(context):
-    path = context.directory + "\screenshot" + str(context.counter) + ".png"
-    context.browser.save_screenshot(path)
-    context.files.append(path)
-    context.counter += 1
+    try:
+        path = (context.directory + "\screenshot" + 
+                str(context.counter) + ".png")
+        context.browser.save_screenshot(path)
+        context.files.append(path)
+        context.counter += 1
+    except:
+        raise AssertionError('Не удалось сохранить скриншот')
 
-@then('запомнить "{obj}"')
-def step(context, obj):
-    obj = obj.lower()
-    to_mem = obj + '_remembered'
-    context.locator[to_mem] = context.browser.find_element_by_css_selector(
-                                                context.locator[obj]).text
+@then('нажать на кнопку Три полоски')
+def step(context):
+    context.page.click_gently(CBRPageLocators.BURGER)
 
-@then('сменить язык на "{lang}"')
-def step(context, lang):
-    context.execute_steps('Тогда нажать на "%s"' % lang)
+@then('нажать на раздел О сайте')
+def step(context):
+    context.page.click_gently(CBRPageLocators.ABOUT)
 
-@then('проверить, что "{obj}" изменился')
-def step(context, obj):
-    obj = obj.lower()
-    from_mem = obj + '_remembered'
-    assert (context.locator[from_mem] != 
-            context.browser.find_element_by_css_selector(
-                    context.locator[obj]).text), "%s не изменился!" % obj
+@then('нажать на ссылку Предупреждение')
+def step(context):
+    context.page.click_gently(CBRPageLocators.WARNING)
+
+@then('запомнить текст предупреждения')
+def step(context):
+    context.page.warning_text = context.page.warning_memory(
+                                            CBRPageLocators.WARNING_TEXT)
+
+@then('сменить язык страницы на EN')
+def step(context):
+    context.page.click_gently(CBRPageLocators.EN_LANG)
+
+@then('проверить, что текст отличается от запомненного ранее')
+def step(context):
+    assert context.page.check_warning(
+                CBRPageLocators.WARNING_TEXT), 'Текст не изменился'
